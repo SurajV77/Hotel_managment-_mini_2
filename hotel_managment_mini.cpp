@@ -1,163 +1,200 @@
 #include <iostream>
 #include <string>
-#include <iomanip>
 using namespace std;
 
-// Node for customer record (Linked List)
-struct Customer {
-    int roomNumber;
-    string name;
-    int days;
-    double bill;
-    Customer* next;
+//----------------- NODE STRUCTURES ----------------//
+struct RoomType {
+    string type;
+    int price;
+    RoomType *left, *right;
 };
 
-// Hotel Management Class
-class Hotel {
-private:
-    Customer* head;
+struct Customer {
+    int roomNo;
+    string name;
+    string roomType;
+    Customer *next;
+};
 
-public:
-    Hotel() {
-        head = NULL;
+//----------------- GLOBALS ----------------//
+Customer* head = nullptr; // Linked List Head
+RoomType* root = nullptr; // BST Root
+
+const int MAX = 10;
+int front = -1, rear = -1;
+int availableRooms[MAX];
+
+// Stack for checkout history
+string checkoutHistory[50];
+int top = -1;
+
+//----------------- QUEUE FUNCTIONS ----------------//
+bool isFull() { return (rear == MAX - 1); }
+bool isEmpty() { return (front == -1 || front > rear); }
+
+void enqueue(int roomNo) {
+    if (isFull()) return;
+    if (front == -1) front = 0;
+    availableRooms[++rear] = roomNo;
+}
+
+int dequeue() {
+    if (isEmpty()) return -1;
+    return availableRooms[front++];
+}
+
+//----------------- STACK FUNCTIONS ----------------//
+void pushHistory(string name) {
+    if (top < 49) checkoutHistory[++top] = name;
+}
+
+void showHistory() {
+    if (top == -1) {
+        cout << "No checkout history yet.\n";
+        return;
     }
+    cout << "\n--- Checkout History (Recent First) ---\n";
+    for (int i = top; i >= 0; i--) cout << checkoutHistory[i] << endl;
+}
 
-    // Book a room (Insert at end of Linked List)
-    void bookRoom(int room, string cname, int days, double pricePerDay) {
-        Customer* newCustomer = new Customer();
-        newCustomer->roomNumber = room;
-        newCustomer->name = cname;
-        newCustomer->days = days;
-        newCustomer->bill = days * pricePerDay;
-        newCustomer->next = NULL;
-
-        if (head == NULL) {
-            head = newCustomer;
-        } else {
-            Customer* temp = head;
-            while (temp->next != NULL)
-                temp = temp->next;
-            temp->next = newCustomer;
-        }
-
-        cout << "\n✅ Room " << room << " booked for " << cname 
-             << " for " << days << " days. Bill = " << newCustomer->bill << endl;
+//----------------- BST FUNCTIONS ----------------//
+RoomType* insertRoomType(RoomType* root, string type, int price) {
+    if (!root) {
+        RoomType* newNode = new RoomType{type, price, nullptr, nullptr};
+        return newNode;
     }
+    if (type < root->type)
+        root->left = insertRoomType(root->left, type, price);
+    else if (type > root->type)
+        root->right = insertRoomType(root->right, type, price);
+    return root;
+}
 
-    // Search by room number
-    void searchRoom(int room) {
+void inorder(RoomType* root) {
+    if (root) {
+        inorder(root->left);
+        cout << root->type << " - Rs." << root->price << endl;
+        inorder(root->right);
+    }
+}
+
+//----------------- LINKED LIST FUNCTIONS ----------------//
+void addCustomer(int roomNo, string name, string type) {
+    Customer* newCust = new Customer{roomNo, name, type, nullptr};
+    if (!head) head = newCust;
+    else {
         Customer* temp = head;
-        while (temp != NULL) {
-            if (temp->roomNumber == room) {
-                cout << "\n🔎 Room Found!\n";
-                cout << "Room Number: " << temp->roomNumber << "\nName: " << temp->name
-                     << "\nDays: " << temp->days << "\nBill: " << temp->bill << endl;
-                return;
-            }
-            temp = temp->next;
-        }
-        cout << "\n❌ Room not found!\n";
+        while (temp->next) temp = temp->next;
+        temp->next = newCust;
+    }
+}
+
+void showCustomers() {
+    if (!head) {
+        cout << "No customers currently checked-in.\n";
+        return;
+    }
+    cout << "\n--- Current Guests ---\n";
+    Customer* temp = head;
+    while (temp) {
+        cout << "Room: " << temp->roomNo << " | Name: " << temp->name 
+             << " | Type: " << temp->roomType << endl;
+        temp = temp->next;
+    }
+}
+
+void removeCustomer(int roomNo) {
+    if (!head) return;
+    Customer *temp = head, *prev = nullptr;
+
+    if (head->roomNo == roomNo) {
+        pushHistory(head->name);
+        head = head->next;
+        delete temp;
+        return;
     }
 
-    // Display all bookings
-    void displayAll() {
-        if (head == NULL) {
-            cout << "\n⚠️ No bookings available!\n";
-            return;
-        }
-        cout << "\n--- Hotel Records ---\n";
-        Customer* temp = head;
-        while (temp != NULL) {
-            cout << "Room " << temp->roomNumber << " | Name: " << temp->name
-                 << " | Days: " << temp->days << " | Bill: " << temp->bill << endl;
-            temp = temp->next;
-        }
+    while (temp && temp->roomNo != roomNo) {
+        prev = temp;
+        temp = temp->next;
     }
 
-    // Checkout (Delete node from Linked List)
-    void checkout(int room) {
-        if (head == NULL) {
-            cout << "\n⚠️ No records!\n";
-            return;
-        }
-
-        Customer* temp = head;
-        Customer* prev = NULL;
-
-        while (temp != NULL && temp->roomNumber != room) {
-            prev = temp;
-            temp = temp->next;
-        }
-
-        if (temp == NULL) {
-            cout << "\n❌ Room not found!\n";
-            return;
-        }
-
-        if (prev == NULL) {
-            head = head->next;
-        } else {
-            prev->next = temp->next;
-        }
-
-        cout << "\n✅ Checkout successful for Room " << room 
-             << ". Bill Paid = " << temp->bill << endl;
+    if (temp) {
+        pushHistory(temp->name);
+        prev->next = temp->next;
         delete temp;
     }
-};
+}
 
-// Main Menu
+//----------------- MAIN SYSTEM FUNCTIONS ----------------//
+void checkIn() {
+    if (isEmpty()) {
+        cout << "No rooms available!\n";
+        return;
+    }
+
+    int roomNo = dequeue();
+    string name, type;
+    cout << "Enter customer name: ";
+    cin >> ws;
+    getline(cin, name);
+    cout << "Enter room type (Standard/Deluxe/Suite): ";
+    cin >> type;
+    addCustomer(roomNo, name, type);
+    cout << "Check-in successful! Room " << roomNo << " allocated.\n";
+}
+
+void checkOut() {
+    int roomNo;
+    cout << "Enter room number to checkout: ";
+    cin >> roomNo;
+    removeCustomer(roomNo);
+    enqueue(roomNo);
+    cout << "Checkout successful! Room " << roomNo << " is now available.\n";
+}
+
+//----------------- DRIVER CODE ----------------//
 int main() {
-    Hotel h;
-    int choice, room, days;
-    string name;
-    double pricePerDay = 1000.0; // fixed rate
+    // Initialize room queue
+    for (int i = 101; i <= 110; i++) enqueue(i);
 
+    // Insert room types in BST
+    root = insertRoomType(root, "Standard", 2000);
+    root = insertRoomType(root, "Deluxe", 3500);
+    root = insertRoomType(root, "Suite", 6000);
+
+    int choice;
     do {
-        cout << "\n===== Hotel Management System =====";
-        cout << "\n1. Book Room";
-        cout << "\n2. Search Room";
-        cout << "\n3. Display All Records";
-        cout << "\n4. Checkout";
-        cout << "\n5. Exit";
-        cout << "\nEnter choice: ";
+        cout << "\n===== HOTEL MANAGEMENT SYSTEM =====\n";
+        cout << "1. Show Room Types\n";
+        cout << "2. Show Available Rooms\n";
+        cout << "3. Check-in Customer\n";
+        cout << "4. Check-out Customer\n";
+        cout << "5. View Current Guests\n";
+        cout << "6. View Checkout History\n";
+        cout << "0. Exit\n";
+        cout << "Enter your choice: ";
         cin >> choice;
 
         switch (choice) {
-        case 1:
-            cout << "Enter Room Number: ";
-            cin >> room;
-            cout << "Enter Customer Name: ";
-            cin >> name;
-            cout << "Enter Number of Days: ";
-            cin >> days;
-            h.bookRoom(room, name, days, pricePerDay);
-            break;
-
-        case 2:
-            cout << "Enter Room Number to Search: ";
-            cin >> room;
-            h.searchRoom(room);
-            break;
-
-        case 3:
-            h.displayAll();
-            break;
-
-        case 4:
-            cout << "Enter Room Number to Checkout: ";
-            cin >> room;
-            h.checkout(room);
-            break;
-
-        case 5:
-            cout << "\n👋 Exiting... Thank you!\n";
-            break;
-
-        default:
-            cout << "\n⚠️ Invalid Choice!\n";
+            case 1: inorder(root); break;
+            case 2:
+                if (isEmpty()) cout << "No available rooms.\n";
+                else {
+                    cout << "\n--- Available Rooms ---\n";
+                    for (int i = front; i <= rear; i++)
+                        cout << availableRooms[i] << " ";
+                    cout << endl;
+                }
+                break;
+            case 3: checkIn(); break;
+            case 4: checkOut(); break;
+            case 5: showCustomers(); break;
+            case 6: showHistory(); break;
+            case 0: cout << "Exiting system...\n"; break;
+            default: cout << "Invalid choice.\n";
         }
-    } while (choice != 5);
+    } while (choice != 0);
 
     return 0;
 }
